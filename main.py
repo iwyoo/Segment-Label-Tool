@@ -93,6 +93,7 @@ def RGB2HEX(rgb):
 MIN_CURSOR_SIZE = 1
 UNKNOWN = 255
 MAX_CLASS = len(COLORS)
+NUM_DRAW_TICK = 10
 
 class LabelTool():
     def __init__(self, master):
@@ -118,6 +119,8 @@ class LabelTool():
         self.click_pos = False
         self.ready = False
         self.radius = 3
+
+        self.draw_tick = 0
 
         # initialize mouse state
         self.STATE = {}
@@ -148,6 +151,8 @@ class LabelTool():
         self.mainPanel.bind("<Button-3>", self.mouseClickNeg)
         self.mainPanel.bind("<B1-Motion>", self.mouseMovePos)
         self.mainPanel.bind("<B3-Motion>", self.mouseMoveNeg)
+        self.mainPanel.bind("<ButtonRelease-1>", self.drawImage)
+        self.mainPanel.bind("<ButtonRelease-3>", self.drawImage)
         self.mainPanel.grid(row=2, column=1, rowspan=3, sticky=W+N)
 
         self.parent.bind("a", self.prevImage)
@@ -183,8 +188,8 @@ class LabelTool():
         self.disp = Label(self.ctrPanel, text='')
         self.disp.pack(side = RIGHT)
 
-        self.frame.columnconfigure(1, weight=1) # CHECK?
-        self.frame.rowconfigure(4, weight=1)    # CHECK?
+        self.frame.columnconfigure(1, weight=1)
+        self.frame.rowconfigure(4, weight=1)
 
     def loadLabelDir(self):
         self.labelDir = fd.askdirectory(initialdir=".")
@@ -245,7 +250,7 @@ class LabelTool():
             self.label_arr = np.full(self.image_arr.shape[:2], UNKNOWN, dtype=np.uint8)
         self.drawImage()
 
-    def drawImage(self):
+    def drawImage(self, event=False):
         # Draw color on image
         known = self.label_arr != 255
         self.color_arr[known] = COLORS[self.label_arr[known]] * 0.6 \
@@ -265,26 +270,42 @@ class LabelTool():
         # Write image
         self.progLabel.config(text="%04d/%04d" %(self.cur, self.total))
 
-    def saveImage(self):
+    def saveImage(self, event=None):
         with open(self.labelpath, 'w') as f:
             cv2.imwrite(self.labelpath, self.label_arr)
         print("Image No. {:d} saved".format(self.cur))
 
-    def mouseClickPos(self, event):
+    def mouseClickPos(self, event, draw_with_tick=False):
         self.click_pos = True
         if self.ready:
             x, y = event.x, event.y
             cv2.circle(self.label_arr, (x, y), self.radius, self.cur_cls,
                        thickness=-1)
-            self.drawImage()
+            if draw_with_tick:
+                self.draw_tick = (self.draw_tick + 1) % NUM_DRAW_TICK
+                if self.draw_tick == 0:
+                    self.drawImage()
+            else:
+                self.drawImage()
         self.click_pos = False
 
-    def mouseClickNeg(self, event):
+    def mouseClickNeg(self, event, draw_with_tick=False):
         if self.ready:
             x, y = event.x, event.y
             cv2.circle(self.label_arr, (x, y), self.radius, UNKNOWN,
                        thickness=-1)
-            self.drawImage()
+            if draw_with_tick:
+                self.draw_tick = (self.draw_tick + 1) % NUM_DRAW_TICK
+                if self.draw_tick == 0:
+                    self.drawImage()
+            else:
+                self.drawImage()
+
+    def mouseMovePos(self, event=None):
+        self.mouseClickPos(event, draw_with_tick=True)
+
+    def mouseMoveNeg(self, event=None):
+        self.mouseClickNeg(event, draw_with_tick=True)
 
     def cursorDilate(self, event=None):
         self.radius += 1
@@ -292,12 +313,6 @@ class LabelTool():
     def cursorErode(self, event=None):
         if self.radius > 1:
             self.radius -= 1
-
-    def mouseMovePos(self, event=None):
-        self.mouseClickPos(event)
-
-    def mouseMoveNeg(self, event=None):
-        self.mouseClickNeg(event)
 
     def prevClass(self, event=None):
         if self.cur_cls > 0:
