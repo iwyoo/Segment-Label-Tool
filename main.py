@@ -94,6 +94,7 @@ MIN_CURSOR_SIZE = 1
 UNKNOWN = 255
 MAX_CLASS = len(COLORS)
 NUM_DRAW_TICK = 10
+NUM_CURSOR_TICK = 5
 
 class LabelTool():
     def __init__(self, master):
@@ -108,18 +109,15 @@ class LabelTool():
         self.imageDir = None
         self.labelDir = None
         self.imageList = []
-        self.outDir = ''
-        self.cur = 0
+        self.cur_img = 0
         self.cur_cls = 0
         self.total = 0
-        self.category = 0
         self.labelpath = ''
         self.tkimg = None
+        self.cursor = None
 
-        self.click_pos = False
         self.ready = False
         self.radius = 3
-
         self.draw_tick = 0
 
         # initialize mouse state
@@ -151,8 +149,10 @@ class LabelTool():
         self.mainPanel.bind("<Button-3>", self.mouseClickNeg)
         self.mainPanel.bind("<B1-Motion>", self.mouseMovePos)
         self.mainPanel.bind("<B3-Motion>", self.mouseMoveNeg)
+        self.mainPanel.bind("<Motion>", self.mouseMove)
         self.mainPanel.bind("<ButtonRelease-1>", self.drawImage)
         self.mainPanel.bind("<ButtonRelease-3>", self.drawImage)
+        self.mainPanel.bind("<Leave>", self.mouseLeave)
         self.mainPanel.grid(row=2, column=1, rowspan=3, sticky=W+N)
 
         self.parent.bind("a", self.prevImage)
@@ -191,25 +191,8 @@ class LabelTool():
         self.frame.columnconfigure(1, weight=1)
         self.frame.rowconfigure(4, weight=1)
 
-    def loadLabelDir(self):
-        self.labelDir = fd.askdirectory(initialdir=".")
-        self.parent.focus()
-        assert self.labelDir != self.imageDir
-
-        # set up output dir
-        os.makedirs(self.labelDir, exist_ok=True)
-
-        self.labelPath.config(text=self.labelDir)
-
-        if self.imageDir and self.labelDir:
-            self.loadImage()
-            print("{:d} images loaded from {:s}".format(self.total, self.imageDir))
-
-            self.ready = True
-
     def loadImageDir(self):
         self.imageDir = fd.askdirectory(initialdir=".")
-        self.parent.focus()
         assert self.imageDir != self.labelDir
 
         # get image path list
@@ -224,20 +207,28 @@ class LabelTool():
             return
 
         # default to the 1st image in the collection
-        self.cur = 1
+        self.cur_img = 1
         self.total = len(self.imageList)
 
         self.imagePath.config(text=self.imageDir)
-
         if self.imageDir and self.labelDir:
             self.loadImage()
             print("{:d} images loaded from {:s}".format(self.total, self.imageDir))
+            self.ready = True
 
+    def loadLabelDir(self):
+        self.labelDir = fd.askdirectory(initialdir=".")
+        assert self.labelDir != self.imageDir
+
+        self.labelPath.config(text=self.labelDir)
+        if self.imageDir and self.labelDir:
+            self.loadImage()
+            print("{:d} images loaded from {:s}".format(self.total, self.imageDir))
             self.ready = True
 
     def loadImage(self):
         # load image & label
-        imagepath = self.imageList[self.cur-1]
+        imagepath = self.imageList[self.cur_img-1]
         labelname = os.path.splitext(os.path.basename(imagepath))[0] + '.png'
         self.labelpath = os.path.join(self.labelDir, labelname)
 
@@ -250,6 +241,9 @@ class LabelTool():
             self.label_arr = np.full(self.image_arr.shape[:2], UNKNOWN, dtype=np.uint8)
         self.drawImage()
 
+        # Write image
+        self.progLabel.config(text="%04d/%04d" %(self.cur_img, self.total))
+
     def drawImage(self, event=False):
         # Draw color on image
         known = self.label_arr != 255
@@ -260,23 +254,37 @@ class LabelTool():
         # Draw edge
         edge = find_boundaries(self.label_arr)
         self.color_arr[edge, :] = 0
-        
+
         # Set tkimg
         self.tkimg = ImageTk.PhotoImage(Image.fromarray(self.color_arr))
         self.mainPanel.config(width=max(self.tkimg.width(), 400),
                               height=max(self.tkimg.height(), 400))
         self.mainPanel.create_image(0, 0, image=self.tkimg, anchor=NW)
 
-        # Write image
-        self.progLabel.config(text="%04d/%04d" %(self.cur, self.total))
-
     def saveImage(self, event=None):
         with open(self.labelpath, 'w') as f:
             cv2.imwrite(self.labelpath, self.label_arr)
-        print("Image No. {:d} saved".format(self.cur))
+        print("Image No. {:d} saved".format(self.cur_img))
+
+    def mouseLeave(self, event):
+        if self.ready:
+            if self.cursor:
+                self.mainPanel.delete(self.cursor)
+                self.cursor = None
+
+    def mouseMove(self, event):
+        if self.ready:
+            self.x, self.y = event.x, event.y
+            y_in = 0 <= self.y < self.image_arr.shape[0]
+            x_in = 0 <= self.x < self.image_arr.shape[1]
+            if y_in and x_in:
+                if self.cursor:
+                    self.mainPanel.delete(self.cursor)
+                self.cursor = self.mainPanel.create_oval(
+                    self.x - self.radius, self.y - self.radius,
+                    self.x + self.radius, self.y + self.radius)
 
     def mouseClickPos(self, event, draw_with_tick=False):
-        self.click_pos = True
         if self.ready:
             x, y = event.x, event.y
             cv2.circle(self.label_arr, (x, y), self.radius, self.cur_cls,
@@ -287,7 +295,6 @@ class LabelTool():
                     self.drawImage()
             else:
                 self.drawImage()
-        self.click_pos = False
 
     def mouseClickNeg(self, event, draw_with_tick=False):
         if self.ready:
@@ -330,21 +337,21 @@ class LabelTool():
 
     def prevImage(self, event=None):
         self.saveImage()
-        if self.cur > 1:
-            self.cur -= 1
+        if self.cur_img > 1:
+            self.cur_img -= 1
             self.loadImage()
 
     def nextImage(self, event=None):
         self.saveImage()
-        if self.cur < self.total:
-            self.cur += 1
+        if self.cur_img < self.total:
+            self.cur_img += 1
             self.loadImage()
 
     def gotoImage(self):
         idx = int(self.idxEntry.get())
         if 1 <= idx and idx <= self.total:
             self.saveImage()
-            self.cur = idx
+            self.cur_img = idx
             self.loadImage()
 
 
