@@ -4,15 +4,15 @@
 # Author: Inwan Yoo (iwyoo@lunit.io)
 #-------------------------------------------------------------------------------
 
-from Tkinter import *
-import tkMessageBox
+from tkinter import *
+from tkinter import filedialog as fd
 from PIL import Image, ImageTk
 import os
 import glob
 
 import cv2
 import numpy as np
-from shapely.geometry import Point
+from skimage.segmentation import find_boundaries
 
 # colors for the segmentation 
 # color-map of mapillary_vistas dataset
@@ -86,8 +86,13 @@ COLORS = np.asarray([
     [0, 0, 0],
 ])
 
+def RGB2HEX(rgb):
+    # Ref: https://gist.github.com/mezklador/aadbd8e63d1a4ac207ebc3b45fd8d082
+    return "#" + "".join([format(val, '02X') for val in rgb])
+
 MIN_CURSOR_SIZE = 1
 UNKNOWN = 255
+MAX_CLASS = len(COLORS)
 
 class LabelTool():
     def __init__(self, master):
@@ -99,19 +104,20 @@ class LabelTool():
         self.parent.resizable(width=FALSE, height=FALSE)
 
         # initialize global state
-        self.imageDir = ''
-        self.labelDir = ''
+        self.imageDir = None
+        self.labelDir = None
         self.imageList = []
         self.outDir = ''
         self.cur = 0
+        self.cur_cls = 0
         self.total = 0
         self.category = 0
         self.labelpath = ''
         self.tkimg = None
 
+        self.click_pos = False
+        self.ready = False
         self.radius = 3
-        self.class_idx = 0
-
 
         # initialize mouse state
         self.STATE = {}
@@ -120,23 +126,28 @@ class LabelTool():
 
         # ----------------- GUI stuff ---------------------
         # dir entry & load
-        self.image_text = Label(self.frame, text="Image Dir:")
-        self.image_text.grid(row=0, column=0, sticky=E)
-        self.image_entry = Entry(self.frame)
-        self.image_entry.grid(row=0, column=1, sticky=W+E)
-        self.label_text = Label(self.frame, text="Label Dir:")
-        self.label_text.grid(row=1, column=0, sticky=E)
-        self.label_entry = Entry(self.frame)
-        self.label_entry.grid(row=1, column=1, sticky=W+E)
-        self.loadBtn = Button(self.frame, text="Load", command=self.loadDir)
-        self.loadBtn.grid(row=0, column=2, sticky=W+E)
+        self.imageLabel = Label(self.frame, text="Image Dir:")
+        self.imageLabel.grid(row=0, column=0, sticky=E)
+        self.imagePath = Label(self.frame)
+        self.imagePath.grid(row=0, column=1, sticky=W+E)
+        self.labelLabel = Label(self.frame, text="Label Dir:")
+        self.labelLabel.grid(row=1, column=0, sticky=E)
+        self.labelPath = Label(self.frame)
+        self.labelPath.grid(row=1, column=1, sticky=W+E)
+        self.loadImageBtn = Button(self.frame, text="Load image directory", 
+                                   command=self.loadImageDir)
+        self.loadImageBtn.grid(row=0, column=2, sticky=W+E)
+        self.loadlabelBtn = Button(self.frame, text="Load label directory", 
+                                   command=self.loadLabelDir)
+        self.loadlabelBtn.grid(row=1, column=2, sticky=W+E)
 
 
         # main panel for labeling
-        self.mainPanel = Canvas(self.frame, cursor='circle') # CHECK: circle?
+        self.mainPanel = Canvas(self.frame)
         self.mainPanel.bind("<Button-1>", self.mouseClickPos)
-        self.mainPanel.bind("<Button-2>", self.mouseClickNeg)
-        self.mainPanel.bind("<Motion>", self.mouseMove) # TODO
+        self.mainPanel.bind("<Button-3>", self.mouseClickNeg)
+        self.mainPanel.bind("<B1-Motion>", self.mouseMovePos)
+        self.mainPanel.bind("<B3-Motion>", self.mouseMoveNeg)
         self.mainPanel.grid(row=2, column=1, rowspan=3, sticky=W+N)
 
         self.parent.bind("a", self.prevImage)
@@ -147,16 +158,10 @@ class LabelTool():
         self.parent.bind("s", self.cursorErode)
         self.parent.bind("x", self.saveImage)
 
-        # showing bbox info & delete bbox
-        self.class_lbl = Label(self.frame, text='Class select:')
-        self.class_lbl.grid(row=1, column=2, sticky=W+N)
-        self.listbox = Listbox(self.frame, width=22, height=12)
-        self.listbox.grid(row=2, column=2, sticky=N) # CHECK: sticky W+N+E?
-
-        self.btnAdd = Button(self.frame, text='Add', command=self.addClass)
-        self.btnAdd.grid(row=3, column=2, sticky=W+E+N)
-        self.btnDel = Button(self.frame, text='Delete', command=self.delClass)
-        self.btnDel.grid(row=4, column=2, sticky=W+E+N)
+        self.classLabel = Label(self.frame)
+        self.classLabel.grid(row=2, column=2, sticky=W+N)
+        self.classLabel.config(text="Class select: {}".format(self.cur_cls), 
+                               bg=RGB2HEX(COLORS[self.cur_cls]))
 
         # control panel for image navigation
         self.ctrPanel = Frame(self.frame)
@@ -181,17 +186,32 @@ class LabelTool():
         self.frame.columnconfigure(1, weight=1) # CHECK?
         self.frame.rowconfigure(4, weight=1)    # CHECK?
 
-    def loadDir(self):
-        # get image directory from self.entry
-        self.imageDir = self.image_entry.get()
-        self.labelDir = self.label_entry.get()
-        self.parent.focus()  # CHECK?
+    def loadLabelDir(self):
+        self.labelDir = fd.askdirectory(initialdir=".")
+        self.parent.focus()
+        assert self.labelDir != self.imageDir
+
+        # set up output dir
+        os.makedirs(self.labelDir, exist_ok=True)
+
+        self.labelPath.config(text=self.labelDir)
+
+        if self.imageDir and self.labelDir:
+            self.loadImage()
+            print("{:d} images loaded from {:s}".format(self.total, self.imageDir))
+
+            self.ready = True
+
+    def loadImageDir(self):
+        self.imageDir = fd.askdirectory(initialdir=".")
+        self.parent.focus()
+        assert self.imageDir != self.labelDir
 
         # get image path list
         self.imageList = [] 
         for ext in [".jpg", ".JPEG", ".png", ".PNG"]:
             self.imageList.extend(
-                glob.glob(os.path.join(self.imageDir, '*{}'.format(ext)))
+                glob.glob(os.path.join(self.imageDir, '*{}'.format(ext))))
 
         if len(self.imageList) == 0:
             print("No '.jpg', '.JPEG', '.png', '.PNG' images found in the"
@@ -202,11 +222,13 @@ class LabelTool():
         self.cur = 1
         self.total = len(self.imageList)
 
-        # set up output dir
-        os.makedirs(self.label_dir, exist_ok=True)
+        self.imagePath.config(text=self.imageDir)
 
-        self.loadImage()
-        print("{:d} images loaded from {:s}".format(self.total, self.imageDir))
+        if self.imageDir and self.labelDir:
+            self.loadImage()
+            print("{:d} images loaded from {:s}".format(self.total, self.imageDir))
+
+            self.ready = True
 
     def loadImage(self):
         # load image & label
@@ -220,18 +242,28 @@ class LabelTool():
         if os.path.exists(self.labelpath):
             self.label_arr = cv2.imread(self.labelpath, 0)
         else:
-            self.label_arr = np.full(image_arr.shape[:2], UNKNOWN, dtype=np.uint8)
+            self.label_arr = np.full(self.image_arr.shape[:2], UNKNOWN, dtype=np.uint8)
         self.drawImage()
 
     def drawImage(self):
+        # Draw color on image
         known = self.label_arr != 255
         self.color_arr[known] = COLORS[self.label_arr[known]] * 0.6 \
                                 + self.image_arr[known] * 0.4
         self.color_arr[~known] = self.image_arr[~known]
-        
-        # TODO: tk
-        # FUTURE: Edge
 
+        # Draw edge
+        edge = find_boundaries(self.label_arr)
+        self.color_arr[edge, :] = 0
+        
+        # Set tkimg
+        self.tkimg = ImageTk.PhotoImage(Image.fromarray(self.color_arr))
+        self.mainPanel.config(width=max(self.tkimg.width(), 400),
+                              height=max(self.tkimg.height(), 400))
+        self.mainPanel.create_image(0, 0, image=self.tkimg, anchor=NW)
+
+        # Write image
+        self.progLabel.config(text="%04d/%04d" %(self.cur, self.total))
 
     def saveImage(self):
         with open(self.labelpath, 'w') as f:
@@ -239,16 +271,20 @@ class LabelTool():
         print("Image No. {:d} saved".format(self.cur))
 
     def mouseClickPos(self, event):
-        x, y = event.x, event.y
-        cv2.circle(self.label_arr, (x, y), radius=self.radius, self.class_idx,
-                   thickness=-1)
-        self.drawImage()
+        self.click_pos = True
+        if self.ready:
+            x, y = event.x, event.y
+            cv2.circle(self.label_arr, (x, y), self.radius, self.cur_cls,
+                       thickness=-1)
+            self.drawImage()
+        self.click_pos = False
 
     def mouseClickNeg(self, event):
-        x, y = event.x, event.y
-        cv2.circle(self.label_arr, (x, y), radius=self.radius, UNKNOWN,
-                   thickness=-1)
-        self.drawImage()
+        if self.ready:
+            x, y = event.x, event.y
+            cv2.circle(self.label_arr, (x, y), self.radius, UNKNOWN,
+                       thickness=-1)
+            self.drawImage()
 
     def cursorDilate(self, event=None):
         self.radius += 1
@@ -257,25 +293,25 @@ class LabelTool():
         if self.radius > 1:
             self.radius -= 1
 
-    def mouseMove(self, event):
-        # TODO
-        pass
+    def mouseMovePos(self, event=None):
+        self.mouseClickPos(event)
 
-    def addClass(self, event=None):
-        # TODO
-        pass
-
-    def delClass(self, event=None):
-        # TODO
-        pass
+    def mouseMoveNeg(self, event=None):
+        self.mouseClickNeg(event)
 
     def prevClass(self, event=None):
-        # TODO
-        pass
+        if self.cur_cls > 0:
+            self.cur_cls -= 1
+            self.classLabel.config(
+                text="Class select: {}".format(self.cur_cls), 
+                bg=RGB2HEX(COLORS[self.cur_cls]))
 
     def nextClass(self, event=None):
-        # TODO
-        pass
+        if self.cur_cls < MAX_CLASS - 1:
+            self.cur_cls += 1
+            self.classLabel.config(
+                text="Class select: {}".format(self.cur_cls), 
+                bg=RGB2HEX(COLORS[self.cur_cls]))
 
     def prevImage(self, event=None):
         self.saveImage()
@@ -295,6 +331,7 @@ class LabelTool():
             self.saveImage()
             self.cur = idx
             self.loadImage()
+
 
 if __name__ == '__main__':
     root = Tk()
