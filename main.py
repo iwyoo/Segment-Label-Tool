@@ -152,7 +152,6 @@ class LabelTool():
         self.mainPanel.bind("<Motion>", self.mouseMove)
         self.mainPanel.bind("<ButtonRelease-1>", self.drawImage)
         self.mainPanel.bind("<ButtonRelease-3>", self.drawImage)
-        self.mainPanel.bind("<Leave>", self.mouseLeave)
         self.mainPanel.grid(row=2, column=1, rowspan=3, sticky=W+N)
 
         self.parent.bind("a", self.prevImage)
@@ -266,20 +265,14 @@ class LabelTool():
             cv2.imwrite(self.labelpath, self.label_arr)
         print("Image No. {:d} saved".format(self.cur_img))
 
-    def mouseLeave(self, event):
-        if self.ready:
-            if self.cursor:
-                self.mainPanel.delete(self.cursor)
-                self.cursor = None
-
     def mouseMove(self, event):
         if self.ready:
             self.x, self.y = event.x, event.y
             y_in = 0 <= self.y < self.image_arr.shape[0]
             x_in = 0 <= self.x < self.image_arr.shape[1]
+            if self.cursor:
+                self.mainPanel.delete(self.cursor)
             if y_in and x_in:
-                if self.cursor:
-                    self.mainPanel.delete(self.cursor)
                 self.cursor = self.mainPanel.create_oval(
                     self.x - self.radius, self.y - self.radius,
                     self.x + self.radius, self.y + self.radius)
@@ -315,11 +308,31 @@ class LabelTool():
         self.mouseClickNeg(event, draw_with_tick=True)
 
     def cursorDilate(self, event=None):
-        self.radius += 1
+        if self.radius < 50:
+            self.radius += 1
+
+            if self.cursor:
+                self.mainPanel.delete(self.cursor)
+
+            y_in = 0 <= self.y < self.image_arr.shape[0]
+            x_in = 0 <= self.x < self.image_arr.shape[1]
+            if y_in and x_in:
+                self.cursor = self.mainPanel.create_oval(
+                    self.x - self.radius, self.y - self.radius,
+                    self.x + self.radius, self.y + self.radius)
 
     def cursorErode(self, event=None):
         if self.radius > 1:
             self.radius -= 1
+            if self.cursor:
+                self.mainPanel.delete(self.cursor)
+
+            y_in = 0 <= self.y < self.image_arr.shape[0]
+            x_in = 0 <= self.x < self.image_arr.shape[1]
+            if y_in and x_in:
+                self.cursor = self.mainPanel.create_oval(
+                    self.x - self.radius, self.y - self.radius,
+                    self.x + self.radius, self.y + self.radius)
 
     def prevClass(self, event=None):
         if self.cur_cls > 0:
