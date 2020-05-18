@@ -4,8 +4,16 @@
 # Author: Inwan Yoo (iwyoo@lunit.io)
 #-------------------------------------------------------------------------------
 
-from tkinter import *
-from tkinter import filedialog as fd
+try:
+    from tkinter import *
+except:
+    from Tkinter import *
+
+try:
+    from tkinter import filedialog as fd
+except:
+    import tkFileDialog as fd
+
 from PIL import Image, ImageTk
 import os
 import glob
@@ -95,6 +103,7 @@ UNKNOWN = 255
 MAX_CLASS = len(COLORS)
 NUM_DRAW_TICK = 10
 NUM_CURSOR_TICK = 5
+DEBUG_FLAG = True
 
 class LabelTool():
     def __init__(self, master):
@@ -117,8 +126,9 @@ class LabelTool():
         self.cursor = None
 
         self.ready = False
-        self.radius = 3
+        self.radius = 9
         self.draw_tick = 0
+        self.opacity = 0.6
 
         # initialize mouse state
         self.STATE = {}
@@ -160,7 +170,10 @@ class LabelTool():
         self.parent.bind("e", self.nextClass)
         self.parent.bind("w", self.cursorDilate)
         self.parent.bind("s", self.cursorErode)
-        self.parent.bind("x", self.saveImage)
+        self.parent.bind("m", self.saveImage)
+        self.parent.bind("l", self.reloadLabel)
+        self.parent.bind("o", self.decreaseOpacity)
+        self.parent.bind("p", self.increaseOpacity)
 
         self.classLabel = Label(self.frame)
         self.classLabel.grid(row=2, column=2, sticky=W+N)
@@ -191,7 +204,10 @@ class LabelTool():
         self.frame.rowconfigure(4, weight=1)
 
     def loadImageDir(self):
-        self.imageDir = fd.askdirectory(initialdir=".")
+        if DEBUG_FLAG:
+            self.imageDir = "Images"
+        else:
+            self.imageDir = fd.askdirectory(initialdir=".")
         assert self.imageDir != self.labelDir
 
         # get image path list
@@ -211,19 +227,22 @@ class LabelTool():
 
         self.imagePath.config(text=self.imageDir)
         if self.imageDir and self.labelDir:
+            self.ready = True
             self.loadImage()
             print("{:d} images loaded from {:s}".format(self.total, self.imageDir))
-            self.ready = True
 
     def loadLabelDir(self):
-        self.labelDir = fd.askdirectory(initialdir=".")
+        if DEBUG_FLAG:
+            self.labelDir = "Labels"
+        else:
+            self.labelDir = fd.askdirectory(initialdir=".")
         assert self.labelDir != self.imageDir
 
         self.labelPath.config(text=self.labelDir)
         if self.imageDir and self.labelDir:
+            self.ready = True
             self.loadImage()
             print("{:d} images loaded from {:s}".format(self.total, self.imageDir))
-            self.ready = True
 
     def loadImage(self):
         # load image & label
@@ -244,20 +263,27 @@ class LabelTool():
         self.progLabel.config(text="%04d/%04d" %(self.cur_img, self.total))
 
     def drawImage(self, event=False):
+        if not self.ready:
+            return
+
         # Draw color on image
         known = self.label_arr != 255
-        self.color_arr[known] = COLORS[self.label_arr[known]] * 0.6 \
-                                + self.image_arr[known] * 0.4
-        self.color_arr[~known] = self.image_arr[~known]
+        color_arr = np.array(self.color_arr)
+        color_arr[known] = COLORS[self.label_arr[known]]
 
         # Draw edge
         edge = find_boundaries(self.label_arr)
-        self.color_arr[edge, :] = 0
+        color_arr[edge, :] = 0
+        known[edge] = True
+
+        self.color_arr[known] = color_arr[known] * self.opacity \
+                                + self.image_arr[known] * (1. - self.opacity)
+        self.color_arr[~known] = self.image_arr[~known]
 
         # Set tkimg
         self.tkimg = ImageTk.PhotoImage(Image.fromarray(self.color_arr))
-        self.mainPanel.config(width=max(self.tkimg.width(), 400),
-                              height=max(self.tkimg.height(), 400))
+        self.mainPanel.config(width=self.tkimg.width(),
+                              height=self.tkimg.height())
         self.mainPanel.create_image(0, 0, image=self.tkimg, anchor=NW)
 
     def saveImage(self, event=None):
@@ -360,12 +386,25 @@ class LabelTool():
             self.cur_img += 1
             self.loadImage()
 
+    def increaseOpacity(self, event=None):
+        self.opacity = min(self.opacity + 0.2, 1.0)
+        self.drawImage()
+
+    def decreaseOpacity(self, event=None):
+        self.opacity = max(self.opacity - 0.2, 0.0)
+        self.drawImage()
+
     def gotoImage(self):
         idx = int(self.idxEntry.get())
         if 1 <= idx and idx <= self.total:
             self.saveImage()
             self.cur_img = idx
             self.loadImage()
+
+    def reloadLabel(self, event=None):
+        if os.path.exists(self.labelpath):
+            self.label_arr = cv2.imread(self.labelpath, 0)
+        self.drawImage()
 
 
 if __name__ == '__main__':
