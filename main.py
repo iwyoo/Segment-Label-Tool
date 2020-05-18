@@ -129,11 +129,7 @@ class LabelTool():
         self.radius = 9
         self.draw_tick = 0
         self.opacity = 0.6
-
-        # initialize mouse state
-        self.STATE = {}
-        self.STATE['click'] = 0
-        self.STATE['x'], self.STATE['y'] = 0, 0
+        self.hide_label = False
 
         # ----------------- GUI stuff ---------------------
         # dir entry & load
@@ -172,6 +168,7 @@ class LabelTool():
         self.parent.bind("s", self.cursorErode)
         self.parent.bind("m", self.saveImage)
         self.parent.bind("l", self.reloadLabel)
+        self.parent.bind("h", self.toggleLabel)
         self.parent.bind("o", self.decreaseOpacity)
         self.parent.bind("p", self.increaseOpacity)
 
@@ -260,28 +257,32 @@ class LabelTool():
         self.drawImage()
 
         # Write image
-        self.progLabel.config(text="%04d/%04d" %(self.cur_img, self.total))
+        self.progLabel.config(text="{:05d}/{:05d}".format(self.cur_img, self.total))
 
     def drawImage(self, event=False):
         if not self.ready:
             return
 
         # Draw color on image
-        known = self.label_arr != 255
-        color_arr = np.array(self.color_arr)
-        color_arr[known] = COLORS[self.label_arr[known]]
+        if self.hide_label:
+            draw_arr = self.image_arr
+        else:
+            known = self.label_arr != 255
+            color_arr = np.array(self.color_arr)
+            color_arr[known] = COLORS[self.label_arr[known]]
 
-        # Draw edge
-        edge = find_boundaries(self.label_arr)
-        color_arr[edge, :] = 0
-        known[edge] = True
+            # Draw edge
+            edge = find_boundaries(self.label_arr)
+            color_arr[edge, :] = 0
+            known[edge] = True
 
-        self.color_arr[known] = color_arr[known] * self.opacity \
-                                + self.image_arr[known] * (1. - self.opacity)
-        self.color_arr[~known] = self.image_arr[~known]
+            self.color_arr[known] = color_arr[known] * self.opacity \
+                                    + self.image_arr[known] * (1. - self.opacity)
+            self.color_arr[~known] = self.image_arr[~known]
+            draw_arr = self.color_arr
 
         # Set tkimg
-        self.tkimg = ImageTk.PhotoImage(Image.fromarray(self.color_arr))
+        self.tkimg = ImageTk.PhotoImage(Image.fromarray(draw_arr))
         self.mainPanel.config(width=self.tkimg.width(),
                               height=self.tkimg.height())
         self.mainPanel.create_image(0, 0, image=self.tkimg, anchor=NW)
@@ -404,6 +405,10 @@ class LabelTool():
     def reloadLabel(self, event=None):
         if os.path.exists(self.labelpath):
             self.label_arr = cv2.imread(self.labelpath, 0)
+        self.drawImage()
+
+    def toggleLabel(self, event=None):
+        self.hide_label = not self.hide_label
         self.drawImage()
 
 
