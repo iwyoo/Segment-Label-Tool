@@ -22,7 +22,7 @@ import cv2
 import numpy as np
 from skimage.segmentation import find_boundaries
 
-# colors for the segmentation 
+# colors for the segmentation
 # color-map of mapillary_vistas dataset
 # Ref: https://github.com/tensorflow/models/blob/master/research/deeplab/utils/get_dataset_colormap.py#L247
 COLORS = np.asarray([
@@ -130,6 +130,8 @@ class LabelTool():
         self.draw_tick = 0
         self.opacity = 0.6
         self.hide_label = False
+        self.x = -1
+        self.y = -1
 
         # ----------------- GUI stuff ---------------------
         # dir entry & load
@@ -141,10 +143,10 @@ class LabelTool():
         self.labelLabel.grid(row=1, column=0, sticky=E)
         self.labelPath = Label(self.frame)
         self.labelPath.grid(row=1, column=1, sticky=W+E)
-        self.loadImageBtn = Button(self.frame, text="Load image directory", 
+        self.loadImageBtn = Button(self.frame, text="Load image directory",
                                    command=self.loadImageDir)
         self.loadImageBtn.grid(row=0, column=2, sticky=W+E)
-        self.loadlabelBtn = Button(self.frame, text="Load label directory", 
+        self.loadlabelBtn = Button(self.frame, text="Load label directory",
                                    command=self.loadLabelDir)
         self.loadlabelBtn.grid(row=1, column=2, sticky=W+E)
 
@@ -174,7 +176,7 @@ class LabelTool():
 
         self.classLabel = Label(self.frame)
         self.classLabel.grid(row=2, column=2, sticky=W+N)
-        self.classLabel.config(text="Class select: {}".format(self.cur_cls), 
+        self.classLabel.config(text="Class select: {}".format(self.cur_cls),
                                bg=RGB2HEX(COLORS[self.cur_cls]))
 
         # control panel for image navigation
@@ -208,7 +210,7 @@ class LabelTool():
         assert self.imageDir != self.labelDir
 
         # get image path list
-        self.imageList = [] 
+        self.imageList = []
         for ext in [".jpg", ".JPEG", ".png", ".PNG"]:
             self.imageList.extend(
                 glob.glob(os.path.join(self.imageDir, '*{}'.format(ext))))
@@ -306,9 +308,9 @@ class LabelTool():
 
     def mouseClickPos(self, event, draw_with_tick=False):
         if self.ready:
-            x, y = event.x, event.y
-            cv2.circle(self.label_arr, (x, y), self.radius, self.cur_cls,
-                       thickness=-1)
+            self.x, self.y = event.x, event.y
+            cv2.circle(self.label_arr, (self.x, self.y), self.radius,
+                       self.cur_cls, thickness=-1)
             if draw_with_tick:
                 self.draw_tick = (self.draw_tick + 1) % NUM_DRAW_TICK
                 if self.draw_tick == 0:
@@ -318,9 +320,9 @@ class LabelTool():
 
     def mouseClickNeg(self, event, draw_with_tick=False):
         if self.ready:
-            x, y = event.x, event.y
-            cv2.circle(self.label_arr, (x, y), self.radius, UNKNOWN,
-                       thickness=-1)
+            self.x, self.y = event.x, event.y
+            cv2.circle(self.label_arr, (self.x, self.y), self.radius,
+                       UNKNOWN, thickness=-1)
             if draw_with_tick:
                 self.draw_tick = (self.draw_tick + 1) % NUM_DRAW_TICK
                 if self.draw_tick == 0:
@@ -365,14 +367,14 @@ class LabelTool():
         if self.cur_cls > 0:
             self.cur_cls -= 1
             self.classLabel.config(
-                text="Class select: {}".format(self.cur_cls), 
+                text="Class select: {}".format(self.cur_cls),
                 bg=RGB2HEX(COLORS[self.cur_cls]))
 
     def nextClass(self, event=None):
         if self.cur_cls < MAX_CLASS - 1:
             self.cur_cls += 1
             self.classLabel.config(
-                text="Class select: {}".format(self.cur_cls), 
+                text="Class select: {}".format(self.cur_cls),
                 bg=RGB2HEX(COLORS[self.cur_cls]))
 
     def prevImage(self, event=None):
