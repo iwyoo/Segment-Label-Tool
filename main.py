@@ -293,7 +293,8 @@ class LabelTool():
     def saveImage(self, event=None):
         with open(self.labelpath, 'w') as f:
             cv2.imwrite(self.labelpath, self.label_arr)
-        print("Image No. {:d} saved".format(self.cur_img))
+        print("Image No. {:d} saved: {}".format(
+            self.cur_img, self.imageList[self.cur_img-1]))
 
     def mouseMove(self, event):
         if self.ready:
