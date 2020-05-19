@@ -128,7 +128,7 @@ class LabelTool():
         self.ready = False
         self.radius = 9
         self.draw_tick = 0
-        self.opacity = 0.6
+        self.opacity = 0.4
         self.hide_label = False
         self.x = -1
         self.y = -1
@@ -313,6 +313,16 @@ class LabelTool():
             self.x, self.y = event.x, event.y
             cv2.circle(self.label_arr, (self.x, self.y), self.radius,
                        self.cur_cls, thickness=-1)
+
+            y_in = 0 <= self.y < self.image_arr.shape[0]
+            x_in = 0 <= self.x < self.image_arr.shape[1]
+            if self.cursor:
+                self.mainPanel.delete(self.cursor)
+            if y_in and x_in:
+                self.cursor = self.mainPanel.create_oval(
+                    self.x - self.radius, self.y - self.radius,
+                    self.x + self.radius, self.y + self.radius)
+
             if draw_with_tick:
                 self.draw_tick = (self.draw_tick + 1) % NUM_DRAW_TICK
                 if self.draw_tick == 0:
@@ -325,6 +335,16 @@ class LabelTool():
             self.x, self.y = event.x, event.y
             cv2.circle(self.label_arr, (self.x, self.y), self.radius,
                        UNKNOWN, thickness=-1)
+
+            y_in = 0 <= self.y < self.image_arr.shape[0]
+            x_in = 0 <= self.x < self.image_arr.shape[1]
+            if self.cursor:
+                self.mainPanel.delete(self.cursor)
+            if y_in and x_in:
+                self.cursor = self.mainPanel.create_oval(
+                    self.x - self.radius, self.y - self.radius,
+                    self.x + self.radius, self.y + self.radius)
+
             if draw_with_tick:
                 self.draw_tick = (self.draw_tick + 1) % NUM_DRAW_TICK
                 if self.draw_tick == 0:
