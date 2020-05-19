@@ -214,6 +214,7 @@ class LabelTool():
         for ext in [".jpg", ".JPEG", ".png", ".PNG"]:
             self.imageList.extend(
                 glob.glob(os.path.join(self.imageDir, '*{}'.format(ext))))
+        self.imageList.sort()
 
         if len(self.imageList) == 0:
             print("No '.jpg', '.JPEG', '.png', '.PNG' images found in the"
