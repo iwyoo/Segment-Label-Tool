@@ -144,10 +144,10 @@ class LabelTool():
         self.labelPath = Label(self.frame)
         self.labelPath.grid(row=1, column=1, sticky=W+E)
         self.loadImageBtn = Button(self.frame, text="Load image directory",
-                                   command=self.loadImageDir)
+                                   command=self.loadImageDir, takefocus=0)
         self.loadImageBtn.grid(row=0, column=2, sticky=W+E)
         self.loadlabelBtn = Button(self.frame, text="Load label directory",
-                                   command=self.loadLabelDir)
+                                   command=self.loadLabelDir, takefocus=0)
         self.loadlabelBtn.grid(row=1, column=2, sticky=W+E)
 
 
@@ -173,6 +173,7 @@ class LabelTool():
         self.parent.bind("h", self.toggleLabel)
         self.parent.bind("o", self.decreaseOpacity)
         self.parent.bind("p", self.increaseOpacity)
+        self.parent.bind("7", self.fillImage)
 
         self.classLabel = Label(self.frame)
         self.classLabel.grid(row=2, column=2, sticky=W+N)
@@ -182,9 +183,11 @@ class LabelTool():
         # control panel for image navigation
         self.ctrPanel = Frame(self.frame)
         self.ctrPanel.grid(row=5, column=1, columnspan=2, sticky=W+E)
-        self.prevBtn = Button(self.ctrPanel, text='<< Prev', width=10, command=self.prevImage)
+        self.prevBtn = Button(self.ctrPanel, text='<< Prev', width=10,
+                              command=self.prevImage)
         self.prevBtn.pack(side=LEFT, padx=5, pady=3)
-        self.nextBtn = Button(self.ctrPanel, text='Next >>', width=10, command=self.nextImage)
+        self.nextBtn = Button(self.ctrPanel, text='Next >>', width=10,
+                              command=self.nextImage)
         self.nextBtn.pack(side=LEFT, padx=5, pady=3)
         self.progLabel = Label(self.ctrPanel, text="Progress:     /    ")
         self.progLabel.pack(side=LEFT, padx=5)
@@ -192,7 +195,8 @@ class LabelTool():
         self.tmpLabel.pack(side=LEFT, padx=5)
         self.idxEntry = Entry(self.ctrPanel, width=5)
         self.idxEntry.pack(side=LEFT)
-        self.goBtn = Button(self.ctrPanel, text='Go', command=self.gotoImage)
+        self.goBtn = Button(self.ctrPanel, text='Go',
+                            command=self.gotoImage, takefocus=0)
         self.goBtn.pack(side=LEFT)
 
         # display mouse position
@@ -433,6 +437,10 @@ class LabelTool():
 
     def toggleLabel(self, event=None):
         self.hide_label = not self.hide_label
+        self.drawImage()
+
+    def fillImage(self, event=None):
+        self.label_arr[:] = self.cur_cls
         self.drawImage()
 
 
