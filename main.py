@@ -103,7 +103,7 @@ UNKNOWN = 255
 MAX_CLASS = len(COLORS)
 NUM_DRAW_TICK = 10
 NUM_CURSOR_TICK = 5
-DEBUG_FLAG = True
+DEBUG_FLAG = False
 
 class LabelTool():
     def __init__(self, master):
