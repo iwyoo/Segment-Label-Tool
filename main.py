@@ -211,7 +211,6 @@ class LabelTool():
             self.imageDir = "Images"
         else:
             self.imageDir = fd.askdirectory(initialdir=".")
-        assert self.imageDir != self.labelDir
 
         # get image path list
         self.imageList = []
@@ -240,7 +239,6 @@ class LabelTool():
             self.labelDir = "Labels"
         else:
             self.labelDir = fd.askdirectory(initialdir=".")
-        assert self.labelDir != self.imageDir
 
         self.labelPath.config(text=self.labelDir)
         if self.imageDir and self.labelDir:
