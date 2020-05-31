@@ -214,13 +214,13 @@ class LabelTool():
 
         # get image path list
         self.imageList = []
-        for ext in [".jpg", ".JPEG", ".png", ".PNG"]:
+        for ext in [".jpg", ".JPEG"]:
             self.imageList.extend(
                 glob.glob(os.path.join(self.imageDir, '*{}'.format(ext))))
         self.imageList.sort()
 
         if len(self.imageList) == 0:
-            print("No '.jpg', '.JPEG', '.png', '.PNG' images found in the"
+            print("No '.jpg', '.JPEG' images found in the"
                   "specified dir!")
             return
 
