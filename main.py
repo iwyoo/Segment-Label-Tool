@@ -214,7 +214,7 @@ class LabelTool():
 
         # get image path list
         self.imageList = []
-        for ext.lower() in [".jpg", ".jpeg"]:
+        for ext in [".jpg", ".jpeg", ".JPG", ".JPEG"]:
             self.imageList.extend(
                 glob.glob(os.path.join(self.imageDir, '*{}'.format(ext))))
         self.imageList.sort()
